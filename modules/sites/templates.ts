@@ -916,9 +916,11 @@ export type TemplateDemoPreset = {
   }>;
   teachers: Array<{
     id: string;
+    userId?: string;
     name: string;
     teacherSubject: string;
     teacherAvatarUrl: string;
+    languages?: string;
     bio?: string;
   }>;
   testimonials: Array<{

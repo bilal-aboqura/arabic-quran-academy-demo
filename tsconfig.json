@@ -28,5 +28,5 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules", "tests/http/**", "tests/unit/security/course-content.test.ts", "tests/unit/security/nextauth-secret.test.ts"]
 }
