@@ -91,3 +91,24 @@ npm run test:finance:integration
 ```
 
 This container is development-only. It is safe for the scripts to reset because the guard accepts only loopback databases whose name begins with `nexaclass_rehearsal`.
+# Arabic & Quran Academy Demo
+
+Standalone sales-demo tenant for NexaClass, focused on international Arabic and Quran learners.
+
+## Included
+
+- English-first academy landing page with Arabic RTL switcher
+- Arabic for Beginners, Quran Reading, Tajweed, and Quran Memorization programs
+- Teacher profile, private lessons, live lesson scheduling, assignments, quizzes, and progress
+- Mobile responsive layouts for public pages, dashboard, and course experience
+- Explicit DEMO seed data separated by tenant slug: `arabic-quran-demo`
+
+## Run locally
+
+1. Copy `.env.example` to `.env` and configure `DATABASE_URL` and `NEXTAUTH_SECRET`.
+2. Run `npm install` and `npm run db:push`.
+3. Seed the demo with `NEXACLASS_DEMO_SEED=arabic-quran npm run db:seed:arabic-demo`.
+4. Prepare demo access with `NEXACLASS_DEMO_SEED=arabic-quran npx tsx scripts/prepare-arabic-demo-access.ts`.
+5. Set `NEXACLASS_DEV_TENANT_SLUG=arabic-quran-demo`, then run `npm run dev`.
+
+The demo is intentionally marked as sample content. Replace contact details, teacher profile, course content, meeting links, and imagery before using it for a live academy.
