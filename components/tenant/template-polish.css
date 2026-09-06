@@ -1,0 +1,78 @@
+/* Shared interaction details, scoped to teacher websites. */
+.template-site { color-scheme: light; }
+.template-site[data-template="premium-dark"] { color-scheme: dark; }
+.template-header-tools, .template-display-controls { display: flex; align-items: center; gap: .5rem; flex-shrink: 0; }
+.template-display-controls button { display: grid; place-items: center; min-width: 44px; height: 44px; padding-inline: .5rem; border: 1px solid var(--site-line); border-radius: 10px; background: var(--site-surface); color: var(--site-ink); font-size: .8rem; font-weight: 700; }
+.template-display-controls button:hover { background: var(--site-surface-raised); border-color: var(--site-link); }
+.template-mode-sun { display: none; }
+.template-site[data-theme="dark"] .template-mode-moon, .template-site[data-template="premium-dark"]:not([data-theme="light"]) .template-mode-moon { display: none; }
+.template-site[data-theme="dark"] .template-mode-sun, .template-site[data-template="premium-dark"]:not([data-theme="light"]) .template-mode-sun { display: block; }
+.template-site[data-theme="dark"] { color-scheme: dark; --site-bg: #0b1420; --site-surface: #142131; --site-surface-raised: #1b2b3e; --site-ink: #f1f6fa; --site-muted: #b3c2d1; --site-line: #34485d; --site-link: var(--brand-on-dark, #63d5ed) !important; --site-button-bg: var(--brand-on-dark, #1759ae) !important; --site-button-ink: #0b1420; }
+.template-site[data-theme="light"] { color-scheme: light; --site-bg: #fff; --site-surface: #fff; --site-surface-raised: #f1f5f6; --site-ink: #152b30; --site-muted: #4c6165; --site-line: #dbe5e6; --site-link: var(--brand-on-light, #1759ae) !important; --site-button-bg: var(--brand-on-light, #1759ae) !important; --site-button-ink: #fff; }
+.template-site[data-theme="dark"] .math-hero { background-color: var(--site-bg); background-image: linear-gradient(#dbe5e609 1px, transparent 1px), linear-gradient(90deg,#dbe5e609 1px, transparent 1px); }
+.template-site[data-theme="light"][data-template="premium-dark"] .template-section--tint { background: var(--site-surface-raised); }
+@container (max-width: 720px) {
+  .template-header__inner, .gz-header__inner { gap: .5rem; }
+  .template-header-tools, .template-display-controls { gap: .35rem; }
+  .template-site :where(.template-brand, .gz-brand) { flex: 1; min-width: 0; max-width: none; }
+  .template-site :where(.template-logo, .template-brand-icon, .gz-logo) { width: 34px; height: 34px; }
+}
+.template-site {
+  --color-primary-hover: color-mix(in srgb, var(--site-button-bg) 92%, var(--site-ink));
+  --color-background: var(--site-bg);
+  --color-surface: var(--site-surface);
+  --color-foreground: var(--site-ink);
+  --color-muted: var(--site-muted);
+  --color-border: var(--site-line);
+  --color-primary: var(--site-link);
+}
+.template-site[data-theme] .template-footer { background: var(--site-bg); color: var(--site-ink); }
+.template-site button[type="submit"][class~="bg-[var(--color-primary)]"] { color: var(--site-button-ink); }
+.template-site .template-nav > .template-button:hover { color: var(--site-button-ink); }
+.template-site :where(a, button, summary) { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+.template-site :where(button, summary) { cursor: pointer; }
+.template-site :where(a, button, summary, input) { transition: color 160ms ease, background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease, transform 180ms ease; }
+.template-site :where(a, button, summary, input):focus-visible { outline: 3px solid var(--site-link); outline-offset: 4px; }
+.template-site :where(.template-button, .gz-button):active { transform: translateY(1px); box-shadow: none; }
+.template-site :where(.template-nav a, .gz-nav a, .gz-login, .template-mobile button, .template-mobile nav a, .template-filters button) { min-height: 44px; display: inline-flex; align-items: center; }
+.template-site :where(.template-footer a, .gz-footer a, .gz-text-link, .math-hero__browse):hover { text-decoration: underline; text-underline-offset: .3em; }
+.template-site :where(.template-faq-item, .gz-faq details) { transition: border-color 160ms ease; }
+.template-site summary { min-height: 56px; gap: 1rem; }
+.template-site summary svg { transition: transform 180ms ease; }
+.template-site details[open] summary svg { transform: rotate(180deg); }
+.template-site :where(.template-search, .template-filters, .template-brand, .gz-brand) { min-width: 0; }
+.template-site :where(.template-brand, .gz-brand) > span:last-child { overflow-wrap: anywhere; }
+.template-site :where(.template-subheading, .gz-hero p, .math-hero__copy p) { white-space: pre-line; }
+.template-site :where(.template-course, .gz-course, .template-pathway-card, .gz-feature) { min-width: 0; }
+.template-site :where(.template-search input) { min-width: 0; font-size: 16px; }
+.template-site .template-filters { flex-wrap: wrap; }
+.template-site .template-category-chip { min-height: 52px; }
+.template-site .template-empty { padding: clamp(1.5rem, 5vw, 3rem); border: 1px dashed var(--site-line); border-radius: var(--site-radius); }
+.template-site .template-empty p { margin-block: .5rem 1rem; }
+.gen-z-site .gz-button { background: #1759ae; }
+.gen-z-site .gz-button--secondary { background: var(--gz-surface); color: var(--gz-ink); }
+.gen-z-site .gz-button--white { background: #fff; color: #1759ae; }
+.gen-z-site .gz-final { background: #124b65; }
+.gen-z-site .gz-logo { background: #1759ae; }
+.gen-z-site .gz-feature-grid:empty { display: none; }
+@media (hover: hover) and (pointer: fine) {
+  .template-site :where(.template-filters button, .template-mobile button):hover { background: var(--site-surface-raised); }
+  .template-site :where(.template-category-chip, .gz-subjects a):hover { transform: translateY(-2px); border-color: var(--site-link); }
+  .gen-z-site .gz-button:hover { transform: translateY(-2px); box-shadow: 0 6px 16px #10273a20; }
+  .gen-z-site .gz-course:hover { box-shadow: 0 8px 24px #10273a14; }
+  .template-site summary:hover { color: var(--site-link); }
+}
+@media (hover: none) {
+  .template-site :where(.template-course, .template-button, .gz-button, .gz-teacher):hover { transform: none; box-shadow: none; }
+  .template-site :where(.gz-teacher, .template-hero__visual):hover img { transform: none; }
+}
+@media (max-width: 480px) {
+  .template-site :where(.template-hero-actions, .gz-hero__actions, .math-hero__actions) { flex-direction: column; align-items: stretch; }
+  .template-site :where(.template-hero-actions, .gz-hero__actions, .math-hero__actions) > a { justify-content: center; text-align: center; }
+  .template-site :where(.template-brand, .gz-brand) { font-size: .95rem; }
+  .template-site .template-filters button { padding-inline: .8rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .template-site *, .template-site *::before, .template-site *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+  .template-site :where(a, button, article):hover { transform: none !important; }
+}

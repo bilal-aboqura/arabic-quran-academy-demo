@@ -1,0 +1,37 @@
+import type { SystemWebsiteTemplate, TemplateDemoPreset } from './templates';
+const copy = (title: string, titleEn: string, body = '', bodyEn = '') => ({ title, titleEn, body, bodyEn });
+export const globalArabicTemplate: SystemWebsiteTemplate = {
+  code: 'global-arabic-quran', name: 'Global Arabic & Quran Academy', nameAr: 'أكاديمية العربية والقرآن العالمية', category: 'International academy', version: 1,
+  description: 'An English-first Arabic and Quran academy with private lessons and a clear learning journey.',
+  defaultTheme: { mode: 'light', font: 'Cairo', accent: '#b59967', primary: '#174f40', defaultLocale: 'en' },
+  supportedFeatures: ['rtl', 'ltr', 'seo', 'courses', 'teachers', 'contact', 'brandColors'],
+  sections: [
+    { type: 'HERO', variant: 'global-lesson', config: copy('تعلّم العربية والقرآن عبر الإنترنت أينما كنت', 'Learn Arabic & Quran Online — Wherever You Are', 'دروس شخصية مع معلمين متفانين للأطفال والكبار.', 'Personalized online lessons with dedicated teachers for children and adults.') },
+    { type: 'COURSES', variant: 'programs', config: copy('اختر رحلتك التعليمية', 'A learning path for every beginning', 'خطوات واضحة، وتوجيه شخصي، وتعلّم بالوتيرة المناسبة لك.', 'Clear steps, personal guidance, and room to learn at your own pace.') },
+    { type: 'FEATURES', variant: 'learners', config: { ...copy('تعلّم مصمم حول احتياجاتك', 'Learning Designed Around You'), items: [copy('الأطفال', 'Children', 'تعلّم ودود ومنظم للصغار.', 'Friendly, structured learning designed for young students.'), copy('الكبار', 'Adults', 'تعلّم العربية أو القرآن بالوتيرة المناسبة لك.', 'Learn Arabic or Quran at your own pace.'), copy('المبتدئون', 'Beginners', 'ابدأ بالحروف وأساسيات القراءة.', 'Start from the alphabet and basic Quran reading.'), copy('المستوى المتوسط', 'Intermediate Learners', 'طوّر الطلاقة والتلاوة والثقة.', 'Improve fluency, recitation and confidence.')] } },
+    { type: 'VIDEO', variant: 'steps', config: { ...copy('رحلتك تبدأ بخطوة بسيطة', 'A simple beginning. A meaningful journey.'), items: [copy('اختر برنامجك', 'Choose Your Program'), copy('احجز درسًا تجريبيًا', 'Book Your Trial Lesson'), copy('تعرّف على معلمك', 'Meet Your Teacher'), copy('تعلّم وتابع تقدمك', 'Start Learning & Track Your Progress')] } },
+    { type: 'CONTACT', variant: 'private', config: copy('دروس فردية تناسبك', 'Personalized 1-to-1 Online Lessons', 'خطة تعلّم فردية، ومواعيد مرنة، وملاحظات مباشرة من المعلم. تابع تقدمك وتعلّم من أي مكان.', 'An individual learning plan. Flexible scheduling. Direct teacher feedback. Follow your progress, with lessons accessible from anywhere.') },
+    { type: 'TEACHERS', variant: 'mentors', config: copy('توجيه شخصي في كل خطوة', 'A teacher beside you, every step', 'تعرّف على معلمي الأكاديمية وبرامجهم.', 'Get to know the people guiding your learning journey.') },
+    { type: 'ABOUT', variant: 'families', config: copy('تجربة تعلّم بسيطة للعائلات', 'A Simple Learning Experience for Families', 'هدفنا إتاحة تعلّم العربية والقرآن حول العالم من خلال دروس منظمة وتوجيه شخصي ورحلة واضحة.', 'Our goal is to make Arabic and Quran learning accessible to students around the world through structured online lessons, personal guidance and a clear learning journey.') },
+    { type: 'FAQ', variant: 'questions', config: { ...copy('أسئلة قبل أن تبدأ', 'A little clarity before you begin'), items: [copy('هل الدروس عبر الإنترنت؟', 'Are the lessons online?', 'نعم، يمكنك التعلّم من أي مكان عبر الإنترنت.', 'Yes. Join your lessons online from wherever you feel comfortable.'), copy('هل يمكن للأطفال الانضمام؟', 'Can children join?', 'نعم، تواصل معنا لتحديد البرنامج المناسب لطفلك.', 'Yes. Contact us to find a suitable learning path for your child.'), copy('هل تقبلون المبتدئين تمامًا؟', 'Do you teach complete beginners?', 'نعم، يمكنك البدء من الحروف.', 'Yes. You can start with the alphabet and build step by step.'), copy('هل يمكن تعلّم القرآن دون قراءة العربية؟', 'Can I learn Quran if I cannot read Arabic?', 'يمكنك البدء بالحروف وأساسيات قراءة القرآن.', 'Begin with Arabic letters and the foundations of Quran reading.'), copy('هل الدروس فردية أم جماعية؟', 'Are lessons private or group-based?', 'نقدم دروسًا فردية. تواصل معنا لمعرفة الخيارات المتاحة.', 'Private lessons are available. Ask us about the options for your chosen program.'), copy('كيف أحجز درسًا تجريبيًا؟', 'How can I book a trial lesson?', 'اضغط على زر الحجز للتواصل مع الأكاديمية.', 'Use Book a Trial Lesson to contact the academy and arrange a suitable time.'), copy('هل يمكنني استخدام الهاتف؟', 'Can I access the platform from my phone?', 'نعم، تعمل المنصة على الهاتف والجهاز اللوحي والحاسوب.', 'Yes. Learn on your phone, tablet or laptop.')] } },
+    { type: 'CTA', variant: 'journey', config: copy('ابدأ رحلتك مع العربية والقرآن', 'Start Your Arabic & Quran Learning Journey', 'احجز درسًا تجريبيًا واكتشف المسار المناسب لك.', 'Book your trial lesson and discover the right learning path for you.') },
+  ],
+};
+export const arabicDemoPreset: TemplateDemoPreset = {
+  siteName: 'أكاديمية العربية والقرآن', platformNameEn: 'Arabic & Quran Academy', teacherName: 'Ustadha Maryam', teacherSubject: 'Arabic, Quran Reading & Tajweed',
+  about: String(globalArabicTemplate.sections.find(s => s.type === 'ABOUT')!.config.bodyEn), primaryColor: '#174f40', secondaryColor: '#233e35', accentColor: '#b59967', badge: 'DEMO — sample academy', heroImageUrl: '/academy/teacher-lesson.webp',
+  courses: [
+    ['arabic-beginners', 'Arabic for Beginners', 'العربية للمبتدئين', 'Build a strong foundation in reading, speaking, vocabulary and everyday Arabic.'],
+    ['quran-reading', 'Quran Reading', 'قراءة القرآن', 'Learn to read the Quran correctly from the foundations.'],
+    ['tajweed', 'Tajweed', 'التجويد', 'Improve Quran recitation with structured Tajweed lessons and teacher feedback.'],
+    ['quran-memorization', 'Quran Memorization', 'حفظ القرآن', 'Structured memorization with revision, progress tracking and teacher guidance.'],
+  ].map(([slug, title, titleAr, description]) => ({ id: `demo-${slug}`, slug, title, titleAr, shortDesc: description, shortDescEn: description, price: 0, category: { name: 'Personal learning', nameAr: 'تعلم شخصي' }, badge: 'DEMO' })),
+  categories: [], teachers: [{ id: 'demo-maryam', name: 'Ustadha Maryam', teacherSubject: 'Arabic, Quran Reading & Tajweed', teacherAvatarUrl: '/academy/teacher-lesson.webp', bio: 'DEMO profile · Arabic & English. Personal guidance for your learning journey.' }], testimonials: [], stats: { courses: 4, students: 0, teachers: 1, enrollments: 0 },
+};
+export const academyDemoModules: Record<string, string[]> = {
+  'arabic-beginners': ['Arabic Alphabet', 'Greetings', 'Everyday Vocabulary', 'Simple Sentences', 'Conversation Practice'],
+  'quran-reading': ['Arabic Letters', 'Letter Connections', 'Short Vowels', 'Reading Words', 'Quran Reading Practice'],
+  tajweed: ['Recitation Foundations', 'Articulation', 'Rules of Noon', 'Elongation', 'Guided Practice'],
+  'quran-memorization': ['Your Memorization Plan', 'Listening and Repetition', 'Daily Practice', 'Revision', 'Teacher Review'],
+};
+

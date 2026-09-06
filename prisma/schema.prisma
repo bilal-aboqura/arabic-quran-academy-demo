@@ -1,0 +1,1444 @@
+// Prisma schema — PostgreSQL (VPS / local). Source of truth for `prisma db push`.
+// Set DATABASE_URL in .env, then: npx prisma generate && npx prisma db push
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+}
+
+enum TenantRole {
+  OWNER
+  ADMIN
+  TEACHER
+  ASSISTANT
+  STUDENT
+}
+
+enum TenantMembershipStatus {
+  ACTIVE
+  INVITED
+  SUSPENDED
+  REMOVED
+}
+
+enum TenantDomainKind {
+  SUBDOMAIN
+  CUSTOM
+}
+
+enum TenantDomainStatus {
+  PENDING
+  ACTIVE
+  DISABLED
+}
+
+/// Immutable reason for a change to a student's tenant-local wallet. Amounts
+/// are signed: credits are positive and purchases are negative.
+enum TenantBalanceTransactionKind {
+  LEGACY_OPENING_BALANCE
+  MANUAL_CREDIT
+  COURSE_PURCHASE
+  STORE_PURCHASE
+  SUBSCRIPTION_PURCHASE
+}
+
+/// External providers are selected server-side. This is intentionally distinct
+/// from a tenant's internal student wallet balance.
+enum PaymentProvider {
+  LOCAL_TEST
+  PAYMOB
+  KASHIER
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  FAILED
+  CANCELED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+}
+
+enum OrderItemKind {
+  COURSE
+  STORE_PRODUCT
+  SUBSCRIPTION_PLAN
+}
+
+enum AssignmentSubmissionStatus {
+  NOT_SUBMITTED
+  SUBMITTED
+  LATE
+  REVIEWED
+}
+
+enum PageSectionType {
+  HERO
+  COURSES
+  CATEGORIES
+  ABOUT
+  STATS
+  TEACHERS
+  TESTIMONIALS
+  FAQ
+  CONTACT
+  CTA
+  FEATURES
+  RESULTS
+  VIDEO
+  SOCIAL_PROOF
+}
+
+enum SiteStatus {
+  DRAFT
+  PUBLISHED
+}
+
+/// These statuses describe the academy's NexaClass subscription. They are
+/// deliberately separate from student-facing SubscriptionPlan records.
+enum TenantSubscriptionStatus {
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  EXPIRED
+}
+
+model User {
+  id                   String   @id @default(cuid())
+  email                String   @unique
+  password             String   @map("password_hash")
+  name                 String
+  role                 String   @default("STUDENT")
+  balance              Decimal  @default(0) @db.Decimal(10, 2)
+  studentNumber        String?  @map("student_number")
+  guardianNumber       String?  @map("guardian_number")
+  copyrightCode        String?  @map("copyright_code") @db.VarChar(10)
+  teacherSubject       String?  @map("teacher_subject")
+  teacherAvatarUrl     String?  @map("teacher_avatar_url")
+  teacherHomepageOrder Int?     @map("teacher_homepage_order")
+  currentSessionId     String?  @map("current_session_id")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  enrollments            Enrollment[]
+  coursesCreated         Course[]                   @relation("CourseCreator")
+  categoriesCreated      Category[]                 @relation("CategoryCreator")
+  quizAttempts           QuizAttempt[]
+  activationCodesUsed    ActivationCode[]           @relation("ActivationCodeUser")
+  payments               Payment[]
+  orders                 Order[]
+  paymentAttempts        PaymentAttempt[]
+  homeworkSubmissions    HomeworkSubmission[]
+  conversationsAsStaff   Conversation[]             @relation("ConversationStaff")
+  conversationsAsStudent Conversation[]             @relation("ConversationStudent")
+  messagesSent           Message[]
+  storePurchases         UserStorePurchase[]
+  platformSubscriptions  UserPlatformSubscription[]
+  lessonRatings          LessonRating[]
+  lessonPlaybackAttempts LessonPlaybackAttempt[]
+  tenantMemberships      TenantMembership[]
+  passwordResetTokens    PasswordResetToken[]
+  auditLogs              AuditLog[]                 @relation("AuditLogActorUser")
+  platformAdministrator  PlatformAdministrator?
+
+  @@index([copyrightCode])
+  @@map("User")
+}
+
+/// A tenant is an independently branded school, academy, or teacher platform.
+/// User identities remain global; access is granted only through memberships.
+model Tenant {
+  id        String       @id @default(cuid())
+  slug      String       @unique
+  name      String
+  nameAr    String?      @map("name_ar")
+  status    TenantStatus @default(ACTIVE)
+  createdAt DateTime     @default(now()) @map("created_at")
+  updatedAt DateTime     @updatedAt @map("updated_at")
+
+  memberships            TenantMembership[]
+  domains                TenantDomain[]
+  settings               TenantSettings?
+  auditLogs              AuditLog[]
+  categories             Category[]
+  courses                Course[]
+  enrollments            Enrollment[]
+  activationCodes        ActivationCode[]
+  payments               Payment[]
+  orders                 Order[]
+  paymentAttempts        PaymentAttempt[]
+  liveStreams            LiveStream[]
+  homeworkSubmissions    HomeworkSubmission[]
+  conversations          Conversation[]
+  messages               Message[]
+  storeProducts          StoreProduct[]
+  storePurchases         UserStorePurchase[]
+  subscriptionPlans      SubscriptionPlan[]
+  platformSubscriptions  UserPlatformSubscription[]
+  lessonRatings          LessonRating[]
+  lessonPlaybackAttempts LessonPlaybackAttempt[]
+  quizAttempts           QuizAttempt[]
+  reviews                Review[]
+  studentAccounts        TenantStudentAccount[]
+  balanceTransactions    TenantBalanceTransaction[]
+  lessonProgress         LessonProgress[]
+  courseProgress         CourseProgress[]
+  assignments            Assignment[]
+  assignmentSubmissions  AssignmentSubmission[]
+  site                   Site?
+  saasSubscription       TenantSubscription?
+  saasInvoices           SaaSInvoice[]
+  notifications          Notification[]
+
+  @@index([status])
+  @@map("Tenant")
+}
+
+enum PlatformAdminRole {
+  SUPER_ADMIN
+  PLATFORM_ADMIN
+  SUPPORT_ADMIN
+}
+
+/// Platform authority is an explicit grant, never an interpretation of a
+/// tenant membership or the legacy User.role field.
+model PlatformAdministrator {
+  id        String            @id @default(cuid())
+  userId    String            @unique @map("user_id")
+  role      PlatformAdminRole @default(PLATFORM_ADMIN)
+  isActive  Boolean           @default(true) @map("is_active")
+  createdAt DateTime          @default(now()) @map("created_at")
+  updatedAt DateTime          @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([isActive])
+  @@map("PlatformAdministrator")
+}
+
+/// Configurable commercial offer for a NexaClass tenant. Prices are data, not
+/// hard-coded into application logic. JSON columns intentionally support a
+/// controlled, forward-compatible feature/limit catalogue.
+model SaaSPlan {
+  id                    String   @id @default(cuid())
+  code                  String   @unique
+  name                  String
+  description           String   @default("") @db.Text
+  currency              String   @default("EGP") @db.VarChar(3)
+  price                 Decimal  @default(0) @db.Decimal(12, 2)
+  billingIntervalMonths Int      @default(1) @map("billing_interval_months")
+  trialMonths           Int      @default(0) @map("trial_months")
+  featureFlags          Json     @default("{}") @map("feature_flags")
+  limits                Json     @default("{}")
+  isActive              Boolean  @default(true) @map("is_active")
+  sortOrder             Int      @default(0) @map("sort_order")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  tenantSubscriptions TenantSubscription[]
+  invoices            SaaSInvoice[]
+
+  @@index([isActive, sortOrder])
+  @@map("SaaSPlan")
+}
+
+/// Exactly one current platform subscription is attached to an academy. It
+/// cannot be confused with UserPlatformSubscription, which sells products to
+/// students inside one tenant.
+model TenantSubscription {
+  id                   String                   @id @default(cuid())
+  tenantId             String                   @unique @map("tenant_id")
+  planId               String                   @map("plan_id")
+  status               TenantSubscriptionStatus @default(TRIAL)
+  currentPeriodStart   DateTime                 @default(now()) @map("current_period_start")
+  currentPeriodEnd     DateTime?                @map("current_period_end")
+  trialEndsAt          DateTime?                @map("trial_ends_at")
+  canceledAt           DateTime?                @map("canceled_at")
+  featureFlagOverrides Json                     @default("{}") @map("feature_flag_overrides")
+  limitOverrides       Json                     @default("{}") @map("limit_overrides")
+  createdAt            DateTime                 @default(now()) @map("created_at")
+  updatedAt            DateTime                 @updatedAt @map("updated_at")
+
+  tenant Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  plan   SaaSPlan @relation(fields: [planId], references: [id], onDelete: Restrict)
+
+  @@index([planId, status])
+  @@index([status, currentPeriodEnd])
+  @@map("TenantSubscription")
+}
+
+model SaaSInvoice {
+  id            String   @id @default(cuid())
+  tenantId      String   @map("tenant_id")
+  planId        String?  @map("plan_id")
+  amount        Decimal  @db.Decimal(12, 2)
+  currency      String   @default("EGP") @db.VarChar(3)
+  status        String   @default("PAID")
+  periodStart   DateTime @map("period_start")
+  periodEnd     DateTime @map("period_end")
+  provider      String   @default("MANUAL")
+  transactionId String?  @map("transaction_id")
+  notes         String?  @db.Text
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  tenant Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  plan   SaaSPlan? @relation(fields: [planId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, createdAt(sort: Desc)])
+  @@index([status, createdAt(sort: Desc)])
+  @@map("SaaSInvoice")
+}
+
+/// Tenant-scoped identity, role, and profile data. This is the future source
+/// of authorization; User.role is retained only for the legacy bridge.
+model TenantMembership {
+  id                   String                 @id @default(cuid())
+  tenantId             String                 @map("tenant_id")
+  userId               String                 @map("user_id")
+  role                 TenantRole
+  status               TenantMembershipStatus @default(ACTIVE)
+  displayName          String?                @map("display_name")
+  studentNumber        String?                @map("student_number")
+  guardianNumber       String?                @map("guardian_number")
+  teacherSubject       String?                @map("teacher_subject")
+  teacherBio           String?                @map("teacher_bio")
+  teacherLanguages     String?                @map("teacher_languages")
+  teacherAvatarUrl     String?                @map("teacher_avatar_url")
+  teacherHomepageOrder Int?                   @map("teacher_homepage_order")
+  copyrightCode        String?                @map("copyright_code") @db.VarChar(10)
+  joinedAt             DateTime               @default(now()) @map("joined_at")
+  createdAt            DateTime               @default(now()) @map("created_at")
+  updatedAt            DateTime               @updatedAt @map("updated_at")
+
+  tenant                Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user                  User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  auditLogs             AuditLog[]                 @relation("AuditLogActorMembership")
+  studentEnrollments    Enrollment[]               @relation("EnrollmentStudentMembership")
+  studentAccount        TenantStudentAccount?
+  balanceTransactions   TenantBalanceTransaction[]
+  paymentOrders         Order[]
+  quizAttempts          QuizAttempt[]              @relation("QuizAttemptStudentMembership")
+  lessonProgress        LessonProgress[]           @relation("LessonProgressStudentMembership")
+  courseProgress        CourseProgress[]           @relation("CourseProgressStudentMembership")
+  assignmentsAuthored   Assignment[]               @relation("AssignmentAuthorMembership")
+  assignmentSubmissions AssignmentSubmission[]     @relation("AssignmentStudentMembership")
+  assignmentReviews     AssignmentSubmission[]     @relation("AssignmentReviewerMembership")
+  notifications         Notification[]
+
+  @@unique([tenantId, userId])
+  @@index([userId, status])
+  @@index([tenantId, role, status])
+  @@map("TenantMembership")
+}
+
+/// A wallet belongs to a *student membership*, never to a global identity.
+/// The unique tenant/membership pair also makes an accidental cross-tenant
+/// debit structurally impossible through the commerce service.
+model TenantStudentAccount {
+  id                  String   @id @default(cuid())
+  tenantId            String   @map("tenant_id")
+  studentMembershipId String   @unique @map("student_membership_id")
+  balance             Decimal  @default(0) @db.Decimal(12, 2)
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  tenant            Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  studentMembership TenantMembership           @relation(fields: [studentMembershipId], references: [id], onDelete: Cascade)
+  transactions      TenantBalanceTransaction[]
+
+  @@unique([tenantId, studentMembershipId])
+  @@index([tenantId])
+  @@map("TenantStudentAccount")
+}
+
+/// Append-only financial journal for the legacy stored-balance commerce
+/// bridge. This is deliberately separate from future external gateway orders.
+model TenantBalanceTransaction {
+  id                  String                       @id @default(cuid())
+  tenantId            String                       @map("tenant_id")
+  studentMembershipId String                       @map("student_membership_id")
+  accountId           String                       @map("account_id")
+  kind                TenantBalanceTransactionKind
+  amount              Decimal                      @db.Decimal(12, 2)
+  idempotencyKey      String?                      @map("idempotency_key")
+  referenceType       String?                      @map("reference_type")
+  referenceId         String?                      @map("reference_id")
+  createdAt           DateTime                     @default(now()) @map("created_at")
+
+  tenant            Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  studentMembership TenantMembership     @relation(fields: [studentMembershipId], references: [id], onDelete: Cascade)
+  account           TenantStudentAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, idempotencyKey])
+  @@index([tenantId, studentMembershipId, createdAt(sort: Desc)])
+  @@index([accountId, createdAt(sort: Desc)])
+  @@map("TenantBalanceTransaction")
+}
+
+/// Host names are normalized to lowercase before persistence and resolution.
+/// Only ACTIVE domains may resolve a tenant in production.
+model TenantDomain {
+  id         String             @id @default(cuid())
+  tenantId   String             @map("tenant_id")
+  hostname   String             @unique
+  kind       TenantDomainKind
+  status     TenantDomainStatus @default(PENDING)
+  isPrimary  Boolean            @default(false) @map("is_primary")
+  verifiedAt DateTime?          @map("verified_at")
+  createdAt  DateTime           @default(now()) @map("created_at")
+  updatedAt  DateTime           @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, status])
+  @@map("TenantDomain")
+}
+
+/// Operational tenant defaults and controlled visual identity.
+model TenantSettings {
+  id              String   @id @default(cuid())
+  tenantId        String   @unique @map("tenant_id")
+  platformName    String?  @map("platform_name")
+  platformNameEn  String?  @map("platform_name_en")
+  logoStorageKey  String?  @map("logo_storage_key")
+  logoUrl         String?  @map("logo_url")
+  faviconUrl      String?  @map("favicon_url")
+  heroImageUrl    String?  @map("hero_image_url")
+  primaryColor    String?  @map("primary_color")
+  secondaryColor  String?  @map("secondary_color")
+  accentColor     String?  @map("accent_color")
+  fontPreference  String?  @map("font_preference")
+  shortAbout      String?  @map("short_about") @db.Text
+  seoTitle        String?  @map("seo_title")
+  seoDescription  String?  @map("seo_description") @db.Text
+  contactDetails  Json?    @map("contact_details")
+  teachersEnabled Boolean  @default(false) @map("teachers_enabled")
+  defaultLocale   String   @default("ar") @map("default_locale")
+  timezone        String   @default("Africa/Cairo")
+  currency        String   @default("EGP")
+  socialLinks     Json?    @map("social_links")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("TenantSettings")
+}
+
+/// Controlled, section-based tenant website. This deliberately does not
+/// expose arbitrary HTML, scripts, or cross-tenant references.
+model Site {
+  id              String     @id @default(cuid())
+  tenantId        String     @unique @map("tenant_id")
+  templateId      String?    @map("template_id")
+  templateVersion Int?       @map("template_version")
+  status          SiteStatus @default(DRAFT)
+  publishedAt     DateTime?  @map("published_at")
+  themeOverrides  Json       @default("{}") @map("theme_overrides")
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
+
+  tenant   Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  template WebsiteTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  pages    SitePage[]
+
+  @@map("Site")
+}
+
+/// Shared, versioned presentation definitions. Tenant-owned content remains in
+/// Site/PageSection and is never embedded in a template record.
+model WebsiteTemplate {
+  id                String   @id @default(cuid())
+  code              String   @unique
+  name              String
+  nameAr            String   @map("name_ar")
+  description       String   @db.Text
+  category          String
+  thumbnail         String?
+  previewImage      String?  @map("preview_image")
+  isActive          Boolean  @default(true) @map("is_active")
+  version           Int      @default(1)
+  defaultTheme      Json     @default("{}") @map("default_theme")
+  defaultPages      Json     @default("[]") @map("default_pages")
+  defaultSections   Json     @default("[]") @map("default_sections")
+  supportedFeatures Json     @default("[]") @map("supported_features")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  sites Site[]
+
+  @@index([isActive, category])
+  @@map("WebsiteTemplate")
+}
+
+model SitePage {
+  id          String   @id @default(cuid())
+  siteId      String   @map("site_id")
+  slug        String
+  title       String
+  isHome      Boolean  @default(false) @map("is_home")
+  isPublished Boolean  @default(false) @map("is_published")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  site     Site          @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  sections PageSection[]
+
+  @@unique([siteId, slug])
+  @@index([siteId, isPublished])
+  @@map("SitePage")
+}
+
+model PageSection {
+  id        String          @id @default(cuid())
+  pageId    String          @map("page_id")
+  type      PageSectionType
+  variant   String          @default("default")
+  sortOrder Int             @default(0) @map("sort_order")
+  enabled   Boolean         @default(true)
+  config    Json            @default("{}")
+  createdAt DateTime        @default(now()) @map("created_at")
+  updatedAt DateTime        @updatedAt @map("updated_at")
+
+  page SitePage @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  @@index([pageId, sortOrder])
+  @@map("PageSection")
+}
+
+/// Stores a one-way hash only; raw reset credentials are never persisted.
+model PasswordResetToken {
+  id          String    @id @default(cuid())
+  userId      String    @map("user_id")
+  tokenHash   String    @unique @map("token_hash")
+  expiresAt   DateTime  @map("expires_at")
+  usedAt      DateTime? @map("used_at")
+  requestedIp String?   @map("requested_ip")
+  userAgent   String?   @map("user_agent")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@index([expiresAt])
+  @@map("PasswordResetToken")
+}
+
+/// Immutable security and administration event trail. Do not store secrets,
+/// raw reset tokens, passwords, or full private content in metadata.
+model AuditLog {
+  id                String   @id @default(cuid())
+  tenantId          String?  @map("tenant_id")
+  actorUserId       String?  @map("actor_user_id")
+  actorMembershipId String?  @map("actor_membership_id")
+  action            String
+  targetType        String?  @map("target_type")
+  targetId          String?  @map("target_id")
+  metadata          Json?
+  ipAddress         String?  @map("ip_address")
+  userAgent         String?  @map("user_agent")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  tenant          Tenant?           @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  actorUser       User?             @relation("AuditLogActorUser", fields: [actorUserId], references: [id], onDelete: SetNull)
+  actorMembership TenantMembership? @relation("AuditLogActorMembership", fields: [actorMembershipId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, createdAt])
+  @@index([actorUserId, createdAt])
+  @@index([action, createdAt])
+  @@map("AuditLog")
+}
+
+model Category {
+  id          String   @id @default(cuid())
+  tenantId    String   @map("tenant_id")
+  name        String
+  nameAr      String?  @map("name_ar")
+  slug        String
+  description String?
+  imageUrl    String?  @map("image_url")
+  order       Int      @default(0)
+  createdById String?  @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  courses   Course[]
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdBy User?    @relation("CategoryCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, slug], map: "Category_tenant_slug_key")
+  @@index([tenantId, order])
+  @@map("Category")
+}
+
+model Course {
+  id              String   @id @default(cuid())
+  tenantId        String   @map("tenant_id")
+  title           String
+  titleAr         String?  @map("title_ar")
+  slug            String
+  description     String   @db.Text
+  descriptionEn   String?  @map("description_en") @db.Text
+  shortDesc       String?  @map("short_desc") @db.VarChar(300)
+  shortDescEn     String?  @map("short_desc_en") @db.VarChar(300)
+  imageUrl        String?  @map("image_url")
+  price           Decimal  @default(0) @db.Decimal(10, 2)
+  duration        String?
+  level           String?
+  isPublished     Boolean  @default(false) @map("is_published")
+  order           Int      @default(0)
+  maxQuizAttempts Int?     @map("max_quiz_attempts")
+  categoryId      String?  @map("category_id")
+  createdById     String?  @map("created_by_id")
+  acceptsHomework Boolean  @default(false) @map("accepts_homework")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  category            Category?            @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  tenant              Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdBy           User?                @relation("CourseCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  lessons             Lesson[]
+  quizzes             Quiz[]
+  modules             CourseModule[]
+  enrollments         Enrollment[]
+  activationCodes     ActivationCode[]
+  payments            Payment[]
+  liveStreams         LiveStream[]
+  homeworkSubmissions HomeworkSubmission[]
+  lessonRatings       LessonRating[]
+  lessonProgress      LessonProgress[]
+  courseProgress      CourseProgress[]
+  assignments         Assignment[]
+
+  @@unique([tenantId, slug], map: "Course_tenant_slug_key")
+  @@index([tenantId, isPublished])
+  @@index([categoryId])
+  @@index([createdById])
+  @@map("Course")
+}
+
+/// An ordered, tenant-inherited grouping of course content.  The ID is never
+/// recreated during editing: moving a lesson or quiz only changes its module
+/// reference and order.  Existing courses remain valid with ungrouped content
+/// until their first section is created.
+model CourseModule {
+  id          String   @id @default(cuid())
+  courseId    String   @map("course_id")
+  title       String
+  description String?  @db.Text
+  sortOrder   Int      @default(0) @map("sort_order")
+  isPublished Boolean  @default(false) @map("is_published")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  course      Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lessons     Lesson[]
+  quizzes     Quiz[]
+  assignments Assignment[]
+
+  @@index([courseId, sortOrder])
+  @@map("CourseModule")
+}
+
+/// A tenant-owned course task. Sections are optional so existing courses can
+/// adopt assignments without destructive content-tree rewrites.
+model Assignment {
+  id                    String    @id @default(cuid())
+  tenantId              String    @map("tenant_id")
+  courseId              String    @map("course_id")
+  moduleId              String?   @map("module_id")
+  createdByMembershipId String    @map("created_by_membership_id")
+  title                 String
+  description           String    @default("") @db.Text
+  deadline              DateTime?
+  maxGrade              Int       @default(100) @map("max_grade")
+  isPublished           Boolean   @default(false) @map("is_published")
+  order                 Int       @default(0)
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  tenant              Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  course              Course                 @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  module              CourseModule?          @relation(fields: [moduleId], references: [id], onDelete: SetNull)
+  createdByMembership TenantMembership       @relation("AssignmentAuthorMembership", fields: [createdByMembershipId], references: [id], onDelete: Restrict)
+  submissions         AssignmentSubmission[]
+
+  @@index([tenantId, courseId, isPublished, order])
+  @@index([moduleId, order])
+  @@map("Assignment")
+}
+
+/// The only assignment attempt for a student membership. Absence of this row
+/// is the explicit NOT_SUBMITTED state; submitted rows retain an immutable
+/// submitted timestamp and a reviewer-owned grade/feedback record.
+model AssignmentSubmission {
+  id                     String                     @id @default(cuid())
+  tenantId               String                     @map("tenant_id")
+  assignmentId           String                     @map("assignment_id")
+  studentMembershipId    String                     @map("student_membership_id")
+  textContent            String?                    @map("text_content") @db.Text
+  files                  Json?
+  submittedAt            DateTime                   @default(now()) @map("submitted_at")
+  status                 AssignmentSubmissionStatus @default(SUBMITTED)
+  grade                  Decimal?                   @db.Decimal(7, 2)
+  feedback               String?                    @db.Text
+  reviewedByMembershipId String?                    @map("reviewed_by_membership_id")
+  reviewedAt             DateTime?                  @map("reviewed_at")
+  createdAt              DateTime                   @default(now()) @map("created_at")
+  updatedAt              DateTime                   @updatedAt @map("updated_at")
+
+  tenant               Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  assignment           Assignment        @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  studentMembership    TenantMembership  @relation("AssignmentStudentMembership", fields: [studentMembershipId], references: [id], onDelete: Cascade)
+  reviewedByMembership TenantMembership? @relation("AssignmentReviewerMembership", fields: [reviewedByMembershipId], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, assignmentId, studentMembershipId])
+  @@index([tenantId, studentMembershipId, status, submittedAt(sort: Desc)])
+  @@index([assignmentId, status, submittedAt(sort: Desc)])
+  @@map("AssignmentSubmission")
+}
+
+model Lesson {
+  id                      String   @id @default(cuid())
+  title                   String
+  titleAr                 String?  @map("title_ar")
+  slug                    String
+  content                 String?  @db.Text
+  videoUrl                String?  @map("video_url")
+  pdfUrl                  String?  @map("pdf_url")
+  duration                Int?
+  order                   Int      @default(0)
+  courseId                String   @map("course_id")
+  moduleId                String?  @map("module_id")
+  acceptsHomework         Boolean  @default(false) @map("accepts_homework")
+  playbackLimitEnabled    Boolean  @default(true) @map("playback_limit_enabled")
+  playbackRequiredMinutes Int      @default(15) @map("playback_required_minutes")
+  playbackMaxAttempts     Int      @default(3) @map("playback_max_attempts")
+  createdAt               DateTime @default(now()) @map("created_at")
+  updatedAt               DateTime @updatedAt @map("updated_at")
+
+  course                 Course                  @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  module                 CourseModule?           @relation(fields: [moduleId], references: [id], onDelete: SetNull)
+  activationCodeLessons  ActivationCodeLesson[]
+  homeworkSubmissions    HomeworkSubmission[]
+  lessonRatings          LessonRating[]
+  lessonPlaybackAttempts LessonPlaybackAttempt[]
+  progress               LessonProgress[]
+
+  @@unique([courseId, slug])
+  @@index([courseId])
+  @@index([moduleId, order])
+  @@map("Lesson")
+}
+
+/// Server-authoritative per-lesson resume and completion state. Browser
+/// storage may cache this state, but never replaces this membership-owned row.
+model LessonProgress {
+  id                  String    @id @default(cuid())
+  tenantId            String    @map("tenant_id")
+  studentMembershipId String    @map("student_membership_id")
+  courseId            String    @map("course_id")
+  lessonId            String    @map("lesson_id")
+  positionSeconds     Int       @default(0) @map("position_seconds")
+  completed           Boolean   @default(false)
+  lastViewedAt        DateTime  @default(now()) @map("last_viewed_at")
+  completedAt         DateTime? @map("completed_at")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  tenant            Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  studentMembership TenantMembership @relation("LessonProgressStudentMembership", fields: [studentMembershipId], references: [id], onDelete: Cascade)
+  course            Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lesson            Lesson           @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, studentMembershipId, lessonId])
+  @@index([tenantId, studentMembershipId, courseId, lastViewedAt(sort: Desc)])
+  @@index([courseId, completed])
+  @@map("LessonProgress")
+}
+
+/// Cached course roll-up, recomputed atomically whenever lesson progress is
+/// recorded. Individual LessonProgress rows remain the source of truth.
+model CourseProgress {
+  id                  String    @id @default(cuid())
+  tenantId            String    @map("tenant_id")
+  studentMembershipId String    @map("student_membership_id")
+  courseId            String    @map("course_id")
+  completedLessons    Int       @default(0) @map("completed_lessons")
+  totalLessons        Int       @default(0) @map("total_lessons")
+  progressPercent     Int       @default(0) @map("progress_percent")
+  completed           Boolean   @default(false)
+  lastViewedAt        DateTime  @default(now()) @map("last_viewed_at")
+  completedAt         DateTime? @map("completed_at")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  tenant            Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  studentMembership TenantMembership @relation("CourseProgressStudentMembership", fields: [studentMembershipId], references: [id], onDelete: Cascade)
+  course            Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, studentMembershipId, courseId])
+  @@index([tenantId, studentMembershipId, lastViewedAt(sort: Desc)])
+  @@index([courseId, completed])
+  @@map("CourseProgress")
+}
+
+model Quiz {
+  id               String    @id @default(cuid())
+  title            String
+  courseId         String    @map("course_id")
+  moduleId         String?   @map("module_id")
+  order            Int       @default(0)
+  timeLimitMinutes Int?      @map("time_limit_minutes")
+  /// Quiz settings are intentionally distinct from the legacy course-wide
+  /// attempt limit. A null maxAttempts inherits that legacy course setting.
+  maxAttempts      Int?      @map("max_attempts")
+  /// Percentage required to pass (0 through 100). Null means no pass gate.
+  passingScore     Int?      @map("passing_score")
+  /// Defaults to true so existing quizzes remain reachable after the
+  /// additive migration; new authoring UX may explicitly publish/unpublish.
+  isPublished      Boolean   @default(true) @map("is_published")
+  availableFrom    DateTime? @map("available_from")
+  availableUntil   DateTime? @map("available_until")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  course                Course               @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  module                CourseModule?        @relation(fields: [moduleId], references: [id], onDelete: SetNull)
+  questions             Question[]
+  quizAttempts          QuizAttempt[]
+  activationCodeQuizzes ActivationCodeQuiz[]
+
+  @@index([courseId])
+  @@index([moduleId, order])
+  @@index([isPublished, availableFrom, availableUntil])
+  @@map("Quiz")
+}
+
+model Question {
+  id           String   @id @default(cuid())
+  type         String
+  questionText String   @map("question_text") @db.Text
+  order        Int      @default(0)
+  quizId       String   @map("quiz_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  quiz    Quiz             @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  options QuestionOption[]
+
+  @@index([quizId])
+  @@map("Question")
+}
+
+model QuestionOption {
+  id         String   @id @default(cuid())
+  text       String   @db.Text
+  isCorrect  Boolean  @default(false) @map("is_correct")
+  questionId String   @map("question_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@index([questionId])
+  @@map("QuestionOption")
+}
+
+model Enrollment {
+  id                  String   @id @default(cuid())
+  tenantId            String   @map("tenant_id")
+  userId              String   @map("user_id")
+  studentMembershipId String   @map("student_membership_id")
+  courseId            String   @map("course_id")
+  enrolledAt          DateTime @default(now()) @map("enrolled_at")
+
+  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant            Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  studentMembership TenantMembership @relation("EnrollmentStudentMembership", fields: [studentMembershipId], references: [id], onDelete: Cascade)
+  course            Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, courseId])
+  @@index([tenantId, userId])
+  @@index([tenantId, studentMembershipId])
+  @@index([userId])
+  @@index([courseId])
+  @@map("Enrollment")
+}
+
+model ActivationCode {
+  id           String    @id @default(cuid())
+  tenantId     String    @map("tenant_id")
+  courseId     String    @map("course_id")
+  code         String
+  createdAt    DateTime  @default(now()) @map("created_at")
+  usedAt       DateTime? @map("used_at")
+  usedByUserId String?   @map("used_by_user_id")
+
+  course  Course                 @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  tenant  Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  usedBy  User?                  @relation("ActivationCodeUser", fields: [usedByUserId], references: [id], onDelete: SetNull)
+  lessons ActivationCodeLesson[]
+  quizzes ActivationCodeQuiz[]
+
+  @@unique([tenantId, code], map: "ActivationCode_tenant_code_key")
+  @@index([courseId])
+  @@index([code])
+  @@index([createdAt])
+  @@map("ActivationCode")
+}
+
+model ActivationCodeLesson {
+  activationCodeId String @map("activation_code_id")
+  lessonId         String @map("lesson_id")
+
+  activationCode ActivationCode @relation(fields: [activationCodeId], references: [id], onDelete: Cascade)
+  lesson         Lesson         @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@id([activationCodeId, lessonId])
+  @@index([activationCodeId])
+  @@index([lessonId])
+  @@map("ActivationCodeLesson")
+}
+
+model ActivationCodeQuiz {
+  activationCodeId String @map("activation_code_id")
+  quizId           String @map("quiz_id")
+
+  activationCode ActivationCode @relation(fields: [activationCodeId], references: [id], onDelete: Cascade)
+  quiz           Quiz           @relation(fields: [quizId], references: [id], onDelete: Cascade)
+
+  @@id([activationCodeId, quizId])
+  @@index([activationCodeId])
+  @@index([quizId])
+  @@map("ActivationCodeQuiz")
+}
+
+model QuizAttempt {
+  id                  String    @id @default(cuid())
+  tenantId            String    @map("tenant_id")
+  studentMembershipId String    @map("student_membership_id")
+  userId              String    @map("user_id")
+  quizId              String    @map("quiz_id")
+  score               Int
+  totalQuestions      Int       @map("total_questions")
+  answers             Json?
+  startedAt           DateTime  @default(now()) @map("started_at")
+  submittedAt         DateTime? @map("submitted_at")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant            Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  studentMembership TenantMembership @relation("QuizAttemptStudentMembership", fields: [studentMembershipId], references: [id], onDelete: Cascade)
+  quiz              Quiz             @relation(fields: [quizId], references: [id], onDelete: Cascade)
+
+  @@index([userId, quizId])
+  @@index([tenantId, userId, quizId])
+  @@index([tenantId, studentMembershipId, quizId])
+  @@index([userId])
+  @@map("QuizAttempt")
+}
+
+model Payment {
+  id                String           @id @default(cuid())
+  tenantId          String           @map("tenant_id")
+  userId            String           @map("user_id")
+  /// Legacy wallet course payments retain this relationship. External
+  /// store/subscription payments intentionally have no course.
+  courseId          String?          @map("course_id")
+  orderId           String?          @unique @map("order_id")
+  provider          PaymentProvider?
+  providerReference String?          @map("provider_reference")
+  status            PaymentStatus    @default(PAID)
+  currency          String           @default("EGP") @db.VarChar(3)
+  amount            Decimal          @db.Decimal(10, 2)
+  settledAt         DateTime?        @map("settled_at")
+  createdAt         DateTime         @default(now()) @map("created_at")
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  course Course? @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  order  Order?  @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([tenantId, createdAt])
+  @@index([tenantId, provider, createdAt])
+  @@map("Payment")
+}
+
+/// A server-created, immutable priced intent. Client code can request an
+/// order, but it can never declare it paid or choose the amount.
+model Order {
+  id                  String           @id @default(cuid())
+  tenantId            String           @map("tenant_id")
+  userId              String           @map("user_id")
+  studentMembershipId String           @map("student_membership_id")
+  status              OrderStatus      @default(PENDING)
+  provider            PaymentProvider?
+  providerReference   String?          @map("provider_reference")
+  currency            String           @default("EGP") @db.VarChar(3)
+  amountMinor         Int              @map("amount_minor")
+  idempotencyKey      String           @map("idempotency_key")
+  description         String           @default("")
+  paidAt              DateTime?        @map("paid_at")
+  failedAt            DateTime?        @map("failed_at")
+  createdAt           DateTime         @default(now()) @map("created_at")
+  updatedAt           DateTime         @updatedAt @map("updated_at")
+
+  tenant            Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  studentMembership TenantMembership @relation(fields: [studentMembershipId], references: [id], onDelete: Cascade)
+  items             OrderItem[]
+  payment           Payment?
+  attempts          PaymentAttempt[]
+
+  @@unique([tenantId, userId, idempotencyKey])
+  @@index([tenantId, userId, status, createdAt(sort: Desc)])
+  @@index([studentMembershipId, createdAt(sort: Desc)])
+  @@index([provider, providerReference])
+  @@map("Order")
+}
+
+/// A product snapshot prevents later title/price edits from changing an
+/// already-initiated order. Targets are checked against the tenant again when
+/// the entitlement is granted.
+model OrderItem {
+  id              String        @id @default(cuid())
+  orderId         String        @map("order_id")
+  kind            OrderItemKind
+  targetId        String        @map("target_id")
+  title           String
+  unitAmountMinor Int           @map("unit_amount_minor")
+  quantity        Int           @default(1)
+  createdAt       DateTime      @default(now()) @map("created_at")
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@map("OrderItem")
+}
+
+/// Provider callbacks are durably claimed by provider/event id before any
+/// entitlement write. The raw payload is retained only for reconciliation.
+model PaymentAttempt {
+  id                String          @id @default(cuid())
+  orderId           String          @map("order_id")
+  tenantId          String          @map("tenant_id")
+  userId            String          @map("user_id")
+  provider          PaymentProvider
+  eventId           String          @map("event_id")
+  providerReference String          @map("provider_reference")
+  status            PaymentStatus   @default(PENDING)
+  rawPayload        Json            @map("raw_payload")
+  receivedAt        DateTime        @default(now()) @map("received_at")
+  createdAt         DateTime        @default(now()) @map("created_at")
+
+  order  Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, eventId])
+  @@index([orderId, createdAt(sort: Desc)])
+  @@index([tenantId, provider, createdAt(sort: Desc)])
+  @@map("PaymentAttempt")
+}
+
+model LiveStream {
+  id              String   @id @default(cuid())
+  tenantId        String   @map("tenant_id")
+  courseId        String   @map("course_id")
+  title           String
+  titleAr         String?  @map("title_ar")
+  provider        String
+  meetingUrl      String   @map("meeting_url")
+  meetingId       String?  @map("meeting_id")
+  meetingPassword String?  @map("meeting_password")
+  scheduledAt     DateTime @map("scheduled_at")
+  description     String?  @db.Text
+  order           Int      @default(0)
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([courseId])
+  @@index([tenantId, courseId])
+  @@index([scheduledAt])
+  @@map("LiveStream")
+}
+
+model Review {
+  id            String   @id @default(cuid())
+  tenantId      String   @map("tenant_id")
+  text          String   @db.Text
+  textEn        String?  @map("text_en") @db.Text
+  authorName    String   @map("author_name")
+  authorTitle   String?  @map("author_title")
+  authorTitleEn String?  @map("author_title_en")
+  avatarLetter  String?  @map("avatar_letter")
+  imageUrl      String?  @map("image_url")
+  order         Int      @default(0)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, order])
+  @@index([order])
+  @@map("Review")
+}
+
+model HomepageSetting {
+  id                              String   @id @default("default")
+  teacherImageUrl                 String?  @map("teacher_image_url")
+  heroTitle                       String?  @map("hero_title")
+  heroTitleEn                     String?  @map("hero_title_en")
+  heroSlogan                      String?  @map("hero_slogan")
+  heroSloganEn                    String?  @map("hero_slogan_en")
+  platformName                    String?  @map("platform_name")
+  platformNameEn                  String?  @map("platform_name_en")
+  headerLogoUrl                   String?  @map("header_logo_url")
+  primaryColor                    String?  @map("primary_color")
+  youtubeUrl                      String?  @map("youtube_url")
+  linkedinUrl                     String?  @map("linkedin_url")
+  whatsappUrl                     String?  @map("whatsapp_url")
+  facebookUrl                     String?  @map("facebook_url")
+  telegramUrl                     String?  @map("telegram_url")
+  teamYoutubeUrl                  String?  @map("team_youtube_url")
+  teamLinkedinUrl                 String?  @map("team_linkedin_url")
+  teamWhatsappUrl                 String?  @map("team_whatsapp_url")
+  teamFacebookUrl                 String?  @map("team_facebook_url")
+  teamTelegramUrl                 String?  @map("team_telegram_url")
+  socialRightLabel                String?  @map("social_right_label")
+  socialRightLabelEn              String?  @map("social_right_label_en")
+  socialLeftLabel                 String?  @map("social_left_label")
+  socialLeftLabelEn               String?  @map("social_left_label_en")
+  socialLeftEnabled               Boolean  @default(true) @map("social_left_enabled")
+  pageTitle                       String?  @map("page_title")
+  pageTitleEn                     String?  @map("page_title_en")
+  heroBgPreset                    String?  @map("hero_bg_preset")
+  heroBgCustomFrom                String?  @map("hero_bg_custom_from")
+  heroBgCustomTo                  String?  @map("hero_bg_custom_to")
+  heroFloatImage1                 String?  @map("hero_float_image_1")
+  heroFloatImage2                 String?  @map("hero_float_image_2")
+  heroFloatImage3                 String?  @map("hero_float_image_3")
+  heroTemplate                    String?  @map("hero_template")
+  heroSliderImage1                String?  @map("hero_slider_image_1")
+  heroSliderImage2                String?  @map("hero_slider_image_2")
+  heroSliderImage3                String?  @map("hero_slider_image_3")
+  heroSliderImage4                String?  @map("hero_slider_image_4")
+  heroSliderImage5                String?  @map("hero_slider_image_5")
+  heroSliderCourseId1             String?  @map("hero_slider_course_id_1")
+  heroSliderCourseId2             String?  @map("hero_slider_course_id_2")
+  heroSliderCourseId3             String?  @map("hero_slider_course_id_3")
+  heroSliderCourseId4             String?  @map("hero_slider_course_id_4")
+  heroSliderCourseId5             String?  @map("hero_slider_course_id_5")
+  heroSliderIntervalMs            Int?     @map("hero_slider_interval_ms")
+  hero3Title                      String?  @map("hero3_title")
+  hero3TitleEn                    String?  @map("hero3_title_en")
+  hero3Subtitle                   String?  @map("hero3_subtitle")
+  hero3SubtitleEn                 String?  @map("hero3_subtitle_en")
+  hero3PhoneImageUrl              String?  @map("hero3_phone_image_url")
+  hero3PhoneBgColor               String?  @map("hero3_phone_bg_color")
+  hero3StoreBadge1ImageUrl        String?  @map("hero3_store_badge_1_image_url")
+  hero3StoreBadge1Link            String?  @map("hero3_store_badge_1_link")
+  hero3StoreBadge2ImageUrl        String?  @map("hero3_store_badge_2_image_url")
+  hero3StoreBadge2Link            String?  @map("hero3_store_badge_2_link")
+  footerTitle                     String?  @map("footer_title")
+  footerTitleEn                   String?  @map("footer_title_en")
+  footerTagline                   String?  @map("footer_tagline")
+  footerTaglineEn                 String?  @map("footer_tagline_en")
+  footerCopyright                 String?  @map("footer_copyright")
+  footerCopyrightEn               String?  @map("footer_copyright_en")
+  reviewsSectionTitle             String?  @map("reviews_section_title")
+  reviewsSectionTitleEn           String?  @map("reviews_section_title_en")
+  reviewsSectionSubtitle          String?  @map("reviews_section_subtitle")
+  reviewsSectionSubtitleEn        String?  @map("reviews_section_subtitle_en")
+  reviewsSectionEnabled           Boolean  @default(true) @map("reviews_section_enabled")
+  ctaBadgeText                    String?  @map("cta_badge_text")
+  ctaBadgeTextEn                  String?  @map("cta_badge_text_en")
+  ctaTitle                        String?  @map("cta_title")
+  ctaTitleEn                      String?  @map("cta_title_en")
+  ctaDescription                  String?  @map("cta_description")
+  ctaDescriptionEn                String?  @map("cta_description_en")
+  ctaButtonText                   String?  @map("cta_button_text")
+  ctaButtonTextEn                 String?  @map("cta_button_text_en")
+  teachersEnabled                 Boolean  @default(false) @map("teachers_enabled")
+  subscriptionsEnabled            Boolean  @default(false) @map("subscriptions_enabled")
+  storeEnabled                    Boolean  @default(false) @map("store_enabled")
+  storeSectionTitle               String?  @map("store_section_title")
+  storeSectionTitleEn             String?  @map("store_section_title_en")
+  storeSectionDescription         String?  @map("store_section_description")
+  storeSectionDescriptionEn       String?  @map("store_section_description_en")
+  platformDetailsEnabled          Boolean  @default(false) @map("platform_details_enabled")
+  platformDetailsTitle            String?  @map("platform_details_title")
+  platformDetailsTitleEn          String?  @map("platform_details_title_en")
+  platformDetailsSubtitle         String?  @map("platform_details_subtitle")
+  platformDetailsSubtitleEn       String?  @map("platform_details_subtitle_en")
+  platformDetailsBackgroundColor  String?  @map("platform_details_background_color")
+  platformDetailsItems            String?  @map("platform_details_items") @db.Text
+  platformNewsEnabled             Boolean  @default(false) @map("platform_news_enabled")
+  platformNewsItems               String?  @map("platform_news_items") @db.Text
+  platformNewsSectionTitle        String?  @map("platform_news_section_title")
+  platformNewsSectionTitleEn      String?  @map("platform_news_section_title_en")
+  addBalanceTitle                 String?  @map("add_balance_title")
+  addBalanceTitleEn               String?  @map("add_balance_title_en")
+  addBalanceSubtitle              String?  @map("add_balance_subtitle")
+  addBalanceSubtitleEn            String?  @map("add_balance_subtitle_en")
+  addBalanceMethodTitle           String?  @map("add_balance_method_title")
+  addBalanceMethodTitleEn         String?  @map("add_balance_method_title_en")
+  addBalanceTransferInstruction   String?  @map("add_balance_transfer_instruction")
+  addBalanceTransferInstructionEn String?  @map("add_balance_transfer_instruction_en")
+  addBalanceWalletNumber          String?  @map("add_balance_wallet_number")
+  addBalanceConfirmationNote      String?  @map("add_balance_confirmation_note")
+  addBalanceConfirmationNoteEn    String?  @map("add_balance_confirmation_note_en")
+  addBalanceWhatsappNumber        String?  @map("add_balance_whatsapp_number")
+  addBalanceWhatsappButtonText    String?  @map("add_balance_whatsapp_button_text")
+  addBalanceWhatsappButtonTextEn  String?  @map("add_balance_whatsapp_button_text_en")
+  addBalanceWaitingNote           String?  @map("add_balance_waiting_note")
+  addBalanceWaitingNoteEn         String?  @map("add_balance_waiting_note_en")
+  copyrightOverlayStyle           String?  @map("copyright_overlay_style")
+  updatedAt                       DateTime @updatedAt @map("updated_at")
+
+  @@map("HomepageSetting")
+}
+
+model HomeworkSubmission {
+  id             String   @id @default(cuid())
+  tenantId       String   @map("tenant_id")
+  courseId       String   @map("course_id")
+  userId         String   @map("user_id")
+  lessonId       String?  @map("lesson_id")
+  submissionType String   @map("submission_type")
+  linkUrl        String?  @map("link_url")
+  fileUrl        String?  @map("file_url")
+  fileName       String?  @map("file_name")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  course Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  tenant Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lesson Lesson? @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@index([courseId])
+  @@index([tenantId, userId])
+  @@index([userId])
+  @@index([createdAt])
+  @@index([lessonId])
+  @@map("HomeworkSubmission")
+}
+
+model Conversation {
+  id            String   @id @default(cuid())
+  tenantId      String   @map("tenant_id")
+  staffUserId   String   @map("staff_user_id")
+  studentUserId String   @map("student_user_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  staffUser   User      @relation("ConversationStaff", fields: [staffUserId], references: [id], onDelete: Cascade)
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  studentUser User      @relation("ConversationStudent", fields: [studentUserId], references: [id], onDelete: Cascade)
+  messages    Message[]
+
+  @@unique([tenantId, staffUserId, studentUserId], map: "Conversation_tenant_staff_student_key")
+  @@index([tenantId, staffUserId])
+  @@index([tenantId, studentUserId])
+  @@index([staffUserId])
+  @@index([studentUserId])
+  @@map("Conversation")
+}
+
+model Message {
+  id             String   @id @default(cuid())
+  tenantId       String   @map("tenant_id")
+  conversationId String   @map("conversation_id")
+  senderId       String   @map("sender_id")
+  messageType    String   @map("message_type")
+  content        String?  @db.Text
+  fileUrl        String?  @map("file_url")
+  fileName       String?  @map("file_name")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sender       User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@index([tenantId, conversationId])
+  @@index([createdAt])
+  @@map("Message")
+}
+
+model StoreProduct {
+  id          String   @id @default(cuid())
+  tenantId    String   @map("tenant_id")
+  title       String
+  description String   @default("") @db.Text
+  price       Decimal  @default(0) @db.Decimal(10, 2)
+  costPrice   Decimal  @default(0) @map("cost_price") @db.Decimal(10, 2)
+  imageUrl    String?  @map("image_url")
+  pdfUrl      String?  @map("pdf_url")
+  isActive    Boolean  @default(true) @map("is_active")
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  purchases UserStorePurchase[]
+  tenant    Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, isActive, sortOrder, createdAt(sort: Desc)])
+  @@index([isActive, sortOrder, createdAt(sort: Desc)])
+  @@map("StoreProduct")
+}
+
+model UserStorePurchase {
+  id        String   @id @default(cuid())
+  tenantId  String   @map("tenant_id")
+  userId    String   @map("user_id")
+  productId String   @map("product_id")
+  pricePaid Decimal  @default(0) @map("price_paid") @db.Decimal(10, 2)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user    User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant  Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product StoreProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@index([tenantId, userId, createdAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("UserStorePurchase")
+}
+
+model SubscriptionPlan {
+  id           String   @id @default(cuid())
+  tenantId     String   @map("tenant_id")
+  name         String
+  description  String   @default("") @db.Text
+  imageUrl     String?  @map("image_url")
+  durationKind String   @map("duration_kind")
+  price        Decimal  @default(0) @db.Decimal(10, 2)
+  isActive     Boolean  @default(true) @map("is_active")
+  sortOrder    Int      @default(0) @map("sort_order")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  subscriptions UserPlatformSubscription[]
+  tenant        Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, isActive, sortOrder])
+  @@index([isActive, sortOrder])
+  @@map("SubscriptionPlan")
+}
+
+model UserPlatformSubscription {
+  id        String   @id @default(cuid())
+  tenantId  String   @map("tenant_id")
+  userId    String   @map("user_id")
+  planId    String?  @map("plan_id")
+  pricePaid Decimal  @default(0) @map("price_paid") @db.Decimal(10, 2)
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user   User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  plan   SubscriptionPlan? @relation(fields: [planId], references: [id], onDelete: SetNull)
+
+  @@index([userId, expiresAt])
+  @@index([tenantId, userId, expiresAt])
+  @@map("UserPlatformSubscription")
+}
+
+model LessonRating {
+  id        String   @id @default(cuid())
+  tenantId  String   @map("tenant_id")
+  lessonId  String   @map("lesson_id")
+  userId    String   @map("user_id")
+  courseId  String   @map("course_id")
+  rating    Int
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([lessonId, userId], map: "lesson_rating_unique_lesson_user")
+  @@index([lessonId])
+  @@index([tenantId, lessonId])
+  @@index([courseId])
+  @@index([userId])
+  @@map("LessonRating")
+}
+
+model LessonPlaybackAttempt {
+  id              String    @id @default(cuid())
+  tenantId        String    @map("tenant_id")
+  userId          String    @map("user_id")
+  lessonId        String    @map("lesson_id")
+  watchedSeconds  Int       @default(0) @map("watched_seconds")
+  isPlaying       Boolean   @default(false) @map("is_playing")
+  startedAt       DateTime  @default(now()) @map("started_at")
+  lastHeartbeatAt DateTime  @default(now()) @map("last_heartbeat_at")
+  countedAt       DateTime? @map("counted_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@index([userId, lessonId])
+  @@index([tenantId, userId, lessonId])
+  @@index([userId, lessonId, countedAt])
+  @@map("LessonPlaybackAttempt")
+}
+
+enum NotificationKind {
+  ENROLLMENT
+  PAYMENT
+  ASSIGNMENT_SUBMITTED
+  ASSIGNMENT_GRADED
+  QUIZ_COMPLETED
+  ANNOUNCEMENT
+  SYSTEM
+}
+
+model Notification {
+  id                    String           @id @default(cuid())
+  tenantId              String           @map("tenant_id")
+  recipientMembershipId String           @map("recipient_membership_id")
+  kind                  NotificationKind
+  title                 String
+  titleAr               String?          @map("title_ar")
+  message               String           @db.Text
+  messageAr             String?          @map("message_ar") @db.Text
+  linkUrl               String?          @map("link_url")
+  isRead                Boolean          @default(false) @map("is_read")
+  readAt                DateTime?        @map("read_at")
+  createdAt             DateTime         @default(now()) @map("created_at")
+
+  tenant              Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  recipientMembership TenantMembership @relation(fields: [recipientMembershipId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, recipientMembershipId, isRead, createdAt(sort: Desc)])
+  @@map("Notification")
+}

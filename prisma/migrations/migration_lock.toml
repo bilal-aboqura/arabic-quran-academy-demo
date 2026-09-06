@@ -1,0 +1,3 @@
+# This project uses PostgreSQL. The first checked-in migration is additive because
+# legacy databases were historically managed with `prisma db push`.
+provider = "postgresql"
